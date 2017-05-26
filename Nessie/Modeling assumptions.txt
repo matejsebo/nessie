@@ -1,0 +1,32 @@
+Modeling assumptions 
+(for rearranger)
+
+- prob of a certain location of getting chosen for a rearrangement is determined according to the partition model (double-partition).
+
+- partitions themselves - are their locations in the chromosome fixed, or do these areas' rearrangement probabilities "transfer" when they're rearranged?
+
+After we determine where the rearrangement begins . . .
+
+	+ prob(inversion when excising) = prob(no inversion)
+
+	- uniformly distributed prob(re-insertion) (vs. junking the segment)
+		- LIKELYHOOD_IO == LIKELYHOOD_KEEPING ~= LIKELYHOOD_EXCISION == ??????????? (can we estimate this? what's a best guess?)
+
+	+ reinsertion location strongly dependent on original location - how?
+		- simulation does NOT model this... 
+		- determined according to original distribution, we choose NOT to model this accurately
+	
+
+
+
+NOTES
+
+- median of 2 halves (partition data)
+
+- rearrangements seem localized 
+
+- rearrangements biased towards close-proximity, idk how much
+
+- tandem repeats - hard to handle >2, do not model >2
+
+- handle inplace inversions 
