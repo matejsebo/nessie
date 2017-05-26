@@ -1,3 +1,2 @@
-# nessie
+# Nessie
 Nessie: a Neurospora evolution simulator
-# nessie
