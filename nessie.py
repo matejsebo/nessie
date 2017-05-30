@@ -22,13 +22,12 @@ from multiprocessing import Pool
 import numpy as np
 
 # My modules
-import genome_datasets
 from slyce import SlyceList, Slyce
 
 # Call "python nessie.py -x -i Neurospora_crassa_OR74A_FungiDB-3.1.fasta -o Neurospora_crassa_OR74A_isolated.fasta -s 100000"
 # to generate the fasta file with isolated scaffolds. 
 
-# Call "python nessie.py -i mygenomes/Neurospora_crassa_OR74A_FungiDB-3_isolated.fasta -tm thallic_mat.csv -sm sub_mat.csv"
+# Call "python nessie.py -i mygenomes/Neurospora_crassa_OR74A_FungiDB-3_isolated.fasta -tm thallic_mat.csv -sm sub_mat.csv -pt confirmed_rearrangement_rates.tsv"
 # to run the simulation. 
 
 # Default values for our parameters -----------------------
@@ -49,10 +48,10 @@ MEAN_SUB_RATE = 0.004 # just a dummy value
 FREQ_REARR_HETERO = 1.596e-6 # VARY this parameter
 FREQ_REARR_HOMO = 2.612e-6 # VARY this parameter
 
-MEAN_FREQ_INV_HOMO = 2.612e-6 # empirically estimated
-SD_FREQ_INV_HOMO = 1.384e-6 # empirically estimated
-MEAN_FREQ_INV_HETERO = 1.596e-6 # empirically estimated
-SD_FREQ_INV_HETERO = 1.496e-6 # empirically estimated
+# MEAN_FREQ_INV_HOMO = 2.612e-6 # empirically estimated
+# SD_FREQ_INV_HOMO = 1.384e-6 # empirically estimated
+# MEAN_FREQ_INV_HETERO = 1.596e-6 # empirically estimated
+# SD_FREQ_INV_HETERO = 1.496e-6 # empirically estimated
 
 MEAN_INV_SIZE_HETERO = 1438 # empirically estimated
 SD_INV_SIZE_HETERO = 603 # empirically estimated
@@ -111,16 +110,16 @@ def parse_args():
     parser.add_argument('-fro','--freq_rearr_homo', default=FREQ_REARR_HOMO, \
         help='Frequency of rearrangement for homothallic individuals.', required=False)
 
-    parser.add_argument('-mfie','--mean_freq_inv_hetero', default=MEAN_FREQ_INV_HETERO, \
-        help='Mean frequency of inversion for heterothallic individuals.', required=False)
-    parser.add_argument('-sdfie','--sd_freq_inv_hetero', \
-        help='Standard deviation of the frequency of inversion for heterothallic '+\
-        'individuals.', required=False, default=SD_FREQ_INV_HETERO)
-    parser.add_argument('-mfio','--mean_freq_inv_homo', default=MEAN_FREQ_INV_HOMO, \
-        help='Mean frequency of inversion for homothallic individuals.', required=False)
-    parser.add_argument('-sdfio','--sd_freq_inv_homo', \
-        help='Standard deviation of the frequency of inversion for homothallic '+\
-        'individuals.', required=False, default=SD_FREQ_INV_HOMO)
+    # parser.add_argument('-mfie','--mean_freq_inv_hetero', default=MEAN_FREQ_INV_HETERO, \
+    #     help='Mean frequency of inversion for heterothallic individuals.', required=False)
+    # parser.add_argument('-sdfie','--sd_freq_inv_hetero', \
+    #     help='Standard deviation of the frequency of inversion for heterothallic '+\
+    #     'individuals.', required=False, default=SD_FREQ_INV_HETERO)
+    # parser.add_argument('-mfio','--mean_freq_inv_homo', default=MEAN_FREQ_INV_HOMO, \
+    #     help='Mean frequency of inversion for homothallic individuals.', required=False)
+    # parser.add_argument('-sdfio','--sd_freq_inv_homo', \
+    #     help='Standard deviation of the frequency of inversion for homothallic '+\
+    #     'individuals.', required=False, default=SD_FREQ_INV_HOMO)
 
     parser.add_argument('-mise','--mean_inv_size_hetero', default=MEAN_INV_SIZE_HETERO, \
         help='Mean inversion size for heterothallic individuals.', required=False)
@@ -144,10 +143,12 @@ def parse_args():
     args['speciation_rate'] = float(args['speciation_rate'])
     args['freq_rearr_hetero'] = float(args['freq_rearr_hetero'])
     args['freq_rearr_homo'] = float(args['freq_rearr_homo'])
-    args['mean_freq_inv_hetero'] = float(args['mean_freq_inv_hetero'])
-    args['sd_freq_inv_hetero'] = float(args['sd_freq_inv_hetero'])
-    args['mean_freq_inv_homo'] = float(args['mean_freq_inv_homo'])
-    args['sd_freq_inv_homo'] = float(args['sd_freq_inv_homo'])
+
+    # args['mean_freq_inv_hetero'] = float(args['mean_freq_inv_hetero'])
+    # args['sd_freq_inv_hetero'] = float(args['sd_freq_inv_hetero'])
+    # args['mean_freq_inv_homo'] = float(args['mean_freq_inv_homo'])
+    # args['sd_freq_inv_homo'] = float(args['sd_freq_inv_homo'])
+
     args['mean_inv_size_hetero'] = float(args['mean_inv_size_hetero'])
     args['sd_inv_size_hetero'] = float(args['sd_inv_size_hetero'])
     args['mean_inv_size_homo'] = float(args['mean_inv_size_homo'])
@@ -179,9 +180,12 @@ def parse_args():
 
     if args['speciation_rate'] < 0:
         sys.exit("ERROR: Speciation rate must be positive.")
+        
+    # if args['mean_freq_inv_hetero'] < 0 or args['sd_freq_inv_hetero'] < 0 or \
+    #     args['mean_freq_inv_homo'] < 0 or args['sd_freq_inv_homo'] < 0:
+    #     sys.exit("ERROR: Frequencies/standard deviations must be positive.")
+
     if args['freq_rearr_hetero'] < 0 or args['freq_rearr_homo'] < 0 or \
-        args['mean_freq_inv_hetero'] < 0 or args['sd_freq_inv_hetero'] < 0 or \
-        args['mean_freq_inv_homo'] < 0 or args['sd_freq_inv_homo'] < 0 or \
         args['mean_inv_size_hetero'] < 0 or args['sd_inv_size_hetero'] < 0 or \
         args['mean_inv_size_homo'] < 0 or args['sd_inv_size_homo'] < 0:
         sys.exit("ERROR: Frequencies/standard deviations must be positive.")
@@ -207,14 +211,17 @@ TIME_LAMBDA = args['speciation_rate']
 IS_ISOLATE = args['isolate']
 FREQ_REARR_HETERO = args['freq_rearr_hetero']
 FREQ_REARR_HOMO = args['freq_rearr_homo']
-MEAN_FREQ_INV_HOMO = args['mean_freq_inv_homo']
-SD_FREQ_INV_HOMO = args['sd_freq_inv_homo']
-MEAN_FREQ_INV_HETERO = args['mean_freq_inv_hetero']
-SD_FREQ_INV_HETERO = args['sd_freq_inv_hetero']
+
+# MEAN_FREQ_INV_HOMO = args['mean_freq_inv_homo']
+# SD_FREQ_INV_HOMO = args['sd_freq_inv_homo']
+# MEAN_FREQ_INV_HETERO = args['mean_freq_inv_hetero']
+# SD_FREQ_INV_HETERO = args['sd_freq_inv_hetero']
+
 MEAN_INV_SIZE_HETERO = args['mean_inv_size_hetero']
 SD_INV_SIZE_HETERO = args['sd_inv_size_hetero']
 MEAN_INV_SIZE_HOMO = args['mean_inv_size_homo']
 SD_INV_SIZE_HOMO = args['sd_inv_size_homo']
+
 LIKELIHOOD_INV = args['likelihood_inv']
 LIKELIHOOD_TANDEM = args['likelihood_tandem']
 LIKELIHOOD_IO_REARR = args['likelihood_io_rearr']
@@ -267,6 +274,7 @@ averaged_rates = [(float(partition_base[i][max_rate]) - \
 sorted_rates = np.array(list(sorted(averaged_rates)))
 threshold_indices = [(i_bin+1)*num_bins // NUM_PARTITIONS for i_bin in range(NUM_PARTITIONS-1)]
 thresholds = np.array([sorted_rates[ti] for ti in threshold_indices])
+print thresholds
 
 for i, big_interval in enumerate(partition_base):
     big_interval_len = int(big_interval[end]) - int(big_interval[start])
@@ -277,11 +285,13 @@ for i, big_interval in enumerate(partition_base):
     #PARTITIONS[BIN_INDICES[i][partition_index]] += av_rearr_rate
     #sum_num_partitions[BIN_INDICES[i][partition_index]] += 1
 
-PARTITION_LEN = len(partition_base)
+PARTITION_LEN = len(partition_base) // NUM_PARTITIONS
 # PARTITIONS = np.array(([BIN_INDICES[i*PARTITION_LEN+PARTITION_LEN//2][from_i] + \
 #     [BIN_INDICES[i*PARTITION_LEN+PARTITION_LEN//2][to_i])/2.0 for i in range(NUM_PARTITIONS)])
-partition_indices = 
-#TODOPARTITIONS = np.array([sorted_rates[pi] for pi in BIN_INDICES])
+partition_indices = [i*PARTITION_LEN+PARTITION_LEN//2 for i in range(NUM_PARTITIONS)] # inaccurate rearr rate values here will matter...
+print len(sorted_rates)
+print partition_indices
+PARTITIONS = np.array([sorted_rates[pi] for pi in partition_indices])
 
 print PARTITIONS
 print BIN_INDICES
@@ -714,7 +724,6 @@ def point_mut_multipartition(genome_pairlist, evolutionary_time):
     return mapped_vals
 
 # CHROMOSOME REARRANGER -----------------------------------
-#TODO implement
 def rearranger(genome_pairlist, num_rearr, mean_rearr_size, sd_rearr_size):
     #TODO need to handle (rare) negative values (reselect from distribution)
     #TODO need to make sure these values aren't > scaffold size (WE ASSUME THIS)
@@ -827,6 +836,8 @@ def rearranger(genome_pairlist, num_rearr, mean_rearr_size, sd_rearr_size):
                 sum_lens += size_rearr
 
     #print "x:", x, sum_lens
+
+    #TODO need to actually modify original chromosomes lol
 
     for i, csl in enumerate(chrom_slyce_lists):
         print "F", i, csl

@@ -335,7 +335,6 @@ class Slyce(object):
             self.i1, self.i2, self.i3 = i1, i2, i3
             
         self.length = length # length of the parent list
-        #print self.l, self.length, self.i1, self.i2, self.i3
 
     @staticmethod
     def force_init(l, length, i1, i2, i3):
@@ -349,13 +348,10 @@ class Slyce(object):
     def blank_slice(l, length):
         return Slyce(l, length, 0, 0, 1)
 
-    # ONLY FAILS ON EMPTY Slyces -> need to make sure Slyce is nonzero length before running it through here...
-    # has been tested quite thoroughly
     def invert(self):
         if self.i2 == self.i1: return Slyce.blank_slice(self.l, self.length)
         new_i1, new_i2, new_i3 = None, None, None
         if self.i3 == 1:
-            # if self.i2
             new_i1 = None if self.i2 == None or self.i2 < 0 else self.i2-1
             new_i2 = None if self.i1 == None or self.i1 < 0 else self.i1-1
             new_i3 = -1
@@ -373,7 +369,7 @@ class Slyce(object):
         if self.i3 == 1:
             new_i1 = self.i1 + pos
             new_i2 = self.i2
-        else: # if i3 == -1:# following code isnon-inclusive w respect to pos?
+        else: 
             new_i1 = self.i1 - pos
             new_i2 = self.i2
         if new_i2 == None or new_i2 <= -1:
@@ -385,7 +381,7 @@ class Slyce(object):
         if self.i3 == 1:
             new_i1 = self.i1
             new_i2 = self.i1+pos
-        else: # if i3 == -1:# following code is inclusive w respect to pos?
+        else: 
             new_i1 = self.i1
             new_i2 = self.i1 - pos 
         if new_i2 == None or new_i2 <= -1:
@@ -398,7 +394,7 @@ class Slyce(object):
         if self.i3 == 1:
             new_i1 = self.i1+pos1
             new_i2 = self.i1+pos2
-        else: # if i3 == -1:# following code is inclusive w respect to pos?
+        else: # if i3 == -1:# following code is inclusive w respect to pos
             new_i1 = self.i1-pos1
             new_i2 = self.i1-pos2
         if new_i2 == None or new_i2 <= -1:
@@ -415,7 +411,6 @@ class Slyce(object):
 
     # The following function (used for debugging only!) assumes l in (l,len,i1,i2,i3) is a valid parent list
     def to_list(self):
-        # print self.to_slice()
         return self.l[self.to_slice()]
 
     def __str__(self):
@@ -441,7 +436,6 @@ class SlyceList(object):
         total_bases = 0
         slyce_index = 0
         while total_bases < pos and slyce_index < len(self.sl):
-            # print slyce_index
             total_bases += self.sl[slyce_index].len()
             slyce_index += 1
         slyce_index -= 1
@@ -451,7 +445,6 @@ class SlyceList(object):
         return slyce_index, total_bases
 
     # insert slyce list ("ins") into self at absolute position "position"
-    # debugged reasonably well...
     def insert(self, position, ins):
         # print "INSERT", self.to_list(), position, ins.to_list()
         slyce_index, total_bases = self.slyce_index_at_abs_pos(position)
@@ -492,7 +485,6 @@ class SlyceList(object):
     # does not modify self, returns original SlyceList without the extract AND the extracted SlyceList
     def excise(self, position, ex_len):
         #print "EXCISE", self.to_list(), position, ex_len
-        ## if there is >1 list in the slice list, you're in troouble!!!
         slyce_index_start, total_bases_start = self.slyce_index_at_abs_pos(position)
         slyce_index_end, total_bases_end = self.slyce_index_at_abs_pos(position + ex_len)
 
@@ -504,52 +496,26 @@ class SlyceList(object):
                 [self.sl[slyce_index_start].all_after_pos(rel_pos+ex_len)] + \
                 self.sl[slyce_index_end+1:])
         else:
-            #print "b"
             start_slyce_len = self.sl[slyce_index_start].len()
             end_slyce_len = self.sl[slyce_index_end].len()
 
             rel_pos_start = position - total_bases_start + start_slyce_len
             rel_pos_end = position + ex_len - total_bases_end + end_slyce_len
 
-            # print "rel_pos_start", rel_pos_start
-            # print "rel_pos_end", rel_pos_end
-            # print "s", slyce_index_start, total_bases_start
-            # print "f", slyce_index_end, total_bases_end
-            # print self.sl[slyce_index_start]
-            # print self.sl[slyce_index_start].all_between_pos(rel_pos_start, rel_pos_end)
-
             if slyce_index_start == slyce_index_end:
-                # this part works/has been thoroughly debugged
                 extract = SlyceList([self.sl[slyce_index_start].all_between_pos(rel_pos_start, rel_pos_end)])
                 new_parent = SlyceList(self.sl[0:slyce_index_start] + \
                     [self.sl[slyce_index_start].all_before_pos(rel_pos_start)] + \
                     [self.sl[slyce_index_end].all_after_pos(rel_pos_end)] + \
                     self.sl[slyce_index_end+1:])
             else: 
-                # print self.sl[slyce_index_start].all_after_pos(rel_pos_start)
-                # print SlyceList(self.sl[slyce_index_start+1:slyce_index_end])
-                # print self.sl[slyce_index_end].all_before_pos(rel_pos_end)  
-
                 extract = SlyceList([self.sl[slyce_index_start].all_after_pos(rel_pos_start)] + \
                     self.sl[slyce_index_start+1:slyce_index_end] + \
                     [self.sl[slyce_index_end].all_before_pos(rel_pos_end)])
-                # print SlyceList(self.sl[0:slyce_index_start])
-                # print SlyceList([self.sl[slyce_index_start].all_before_pos(rel_pos_start)])
-                # print "rpe", rel_pos_end
-                # print self.sl[slyce_index_end].len()
-                # print self.sl[slyce_index_end]
-                # print SlyceList([self.sl[slyce_index_end].all_after_pos(rel_pos_end)])
-                # print SlyceList(self.sl[slyce_index_end+1:])
                 new_parent = SlyceList(self.sl[0:slyce_index_start] + \
                     [self.sl[slyce_index_start].all_before_pos(rel_pos_start)] + \
                     [self.sl[slyce_index_end].all_after_pos(rel_pos_end)] + \
                     self.sl[slyce_index_end+1:])
-            
-
-            # print "sie", slyce_index_end
-            # print self.sl[slyce_index_end]
-            # print self.sl[slyce_index_end].all_after_pos(rel_pos_end)            
-
         return new_parent.pare(), extract.pare()
 
     # remove spurious (empty/malformed) slyces from a slyce list
