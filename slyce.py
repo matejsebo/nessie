@@ -409,6 +409,17 @@ class Slyce(object):
         slyce_i = (i1, i2, i3)
         return slice(*slyce_i)
 
+    def post_continuous(self, other_slyce):
+        if self.l == other_slyce.l and self.i3 == other_slyce.i3 and \
+            self.i2 == other_slyce.i1:
+                return True
+        return False
+    def continuous(self, other_slyce):
+        if self.l == other_slyce.l and self.i3 == other_slyce.i3 and \
+            (self.i2 == other_slyce.i1 or self.i1 == other_slyce.i2):
+                return True
+        return False
+
     # The following function (used for debugging only!) assumes l in (l,len,i1,i2,i3) is a valid parent list
     def to_list(self):
         return self.l[self.to_slice()]
@@ -526,6 +537,20 @@ class SlyceList(object):
                 new_s += [s]
 
         return SlyceList(new_s)
+
+    # If back-to-back slyces are contiguous and the SlyceList can be shortened, do so (and modify self).
+    def join_ends(self):
+        if not self.sl:
+            return
+        new_sl = [self.sl[0]]
+        top_index = 0
+        for added_slyce in range(1,len(self.sl)):
+            if new_sl[top_index].post_continuous(added_slyce):
+                new_sl[top_index].i2 = added_slyce
+            else:
+                new_sl += [added_slyce]
+                top_index += 1
+        self.sl = new_sl
 
     # The following functions (used ONLY for debugging) assume l in (l,i1,i2,i3) is a valid parent list
     def to_list(self):
