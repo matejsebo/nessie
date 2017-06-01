@@ -583,14 +583,14 @@ def fork_genome(node, branch_name, depth):
     rearrangements = int(m.floor(rho * t * n_a))
     print "This genome will undergo " + str(rearrangements) + " rearrangements. "
 
-    # # Point mutate the genome. lambda = mu * t
-    # if NUM_PARTITIONS == 1: # Use sub_mat and the old, 1-partition model for substitution
-    #     new_genome = point_mut_single_partition(node.genome, MEAN_SUB_RATE * t, \
-    #         MEAN_INS_RATE * t, MEAN_DEL_RATE * t)
-    # else: # Use the multipartition model
-    #     new_genome = point_mut_multipartition(node.genome, t)
+    # Point mutate the genome. lambda = mu * t
+    if NUM_PARTITIONS == 1: # Use sub_mat and the old, 1-partition model for substitution
+        new_genome = point_mut_single_partition(node.genome, MEAN_SUB_RATE * t, \
+            MEAN_INS_RATE * t, MEAN_DEL_RATE * t)
+    else: # Use the multipartition model
+        new_genome = point_mut_multipartition(node.genome, t)
     """ Rearranger being debugged... """
-    new_genome = node.genome #TOBEREMOVED!!!
+    #new_genome = node.genome #TOBEREMOVED!!!
 
 
     #Rearrange the genome.
@@ -740,7 +740,7 @@ def rearranger(genome_pairlist, num_rearr, mean_rearr_size, sd_rearr_size):
     rearr_sizes = np.round(np.random.normal(mean_rearr_size, sd_rearr_size, num_rearr)) \
         .astype(int)
 
-    # Nx2 array of random numbers in (0, 1] used for the 
+    # Nx2 array of random numbers in (0, 1] used in the rearrangement model
     io_determiners = np.random.random_sample((num_rearr,2))
     # lengths of each chromosome
     lens = [len(seq) for metadata, seq in genome_pairlist]
@@ -762,16 +762,21 @@ def rearranger(genome_pairlist, num_rearr, mean_rearr_size, sd_rearr_size):
 
     for i in range(num_rearr): # perform the ith rearrangement
         print "Performing rearrangement #" + str(i), "--------------------------------------------"
-        size_rearr = rearr_sizes[i] # grab the ith rearrangement size
+        size_rearr = abs(rearr_sizes[i]) # grab the ith rearrangement size #TODO fix trivial positivization
         sum_poss_start_loc = sum_lens - num_scaff * size_rearr
+
+        # Single partition uniform
         abs_pos = np.random.randint(0, sum_poss_start_loc) # absolute position of start loc of rearr
+        
+
+
         my_chrom = 0
         # print abs_pos
         while lens[my_chrom] - size_rearr + 1 < abs_pos:
             abs_pos -= (lens[my_chrom] - size_rearr + 1)
             my_chrom += 1
 
-        print "Chrom", my_chrom, "looks like", chrom_slyce_lists[my_chrom]
+        #print "Chrom", my_chrom, "looks like", chrom_slyce_lists[my_chrom]
         print "From chrom", str(my_chrom) + ", length=(" + str(lens[my_chrom]) + ") at position", abs_pos, "grab length", size_rearr
 
         insert_sl = None
@@ -781,7 +786,7 @@ def rearranger(genome_pairlist, num_rearr, mean_rearr_size, sd_rearr_size):
             chrom_slyce_lists[my_chrom] = new_parent
             insert_sl = insert_sl.invert()
             chrom_slyce_lists[my_chrom] = chrom_slyce_lists[my_chrom].insert(abs_pos, insert_sl)
-            print "Chrom", my_chrom, "now looks like", chrom_slyce_lists[my_chrom]
+            #print "Chrom", my_chrom, "now looks like", chrom_slyce_lists[my_chrom]
 
         elif io_determiners[i][0] < LIKELIHOOD_INV*2: # is it an excision of some sort?
             new_parent, insert_sl = chrom_slyce_lists[my_chrom].excise(abs_pos, size_rearr)
@@ -789,7 +794,7 @@ def rearranger(genome_pairlist, num_rearr, mean_rearr_size, sd_rearr_size):
             lens[my_chrom] -= size_rearr
             sum_lens  -= size_rearr
             print "Excising segment:", insert_sl
-            print "Parent SlyceList is now:", new_parent
+            #print "Parent SlyceList is now:", new_parent
             if io_determiners[i][0] < LIKELIHOOD_INV*2 - LIKELIHOOD_IO_REARR: # is it a translocation excision?
                 print "This is a translocation."
                 if random.getrandbits(1): 
@@ -806,9 +811,10 @@ def rearranger(genome_pairlist, num_rearr, mean_rearr_size, sd_rearr_size):
                 # print type(insert_sl), insert_sl
                 print "Translocating segment into chrom", ins_chrom, "at pos", ins_pos
                 chrom_slyce_lists[ins_chrom] = chrom_slyce_lists[ins_chrom].insert(ins_pos, insert_sl)
-                print "Chrom", ins_chrom, "now looks like", chrom_slyce_lists[ins_chrom]
-                lens[ins_chrom] += size_rearr
+                #print "Chrom", ins_chrom, "now looks like", chrom_slyce_lists[ins_chrom]
+
                 sum_lens += size_rearr
+                lens[ins_chrom] += size_rearr
             else: # is it a deletion?
                 print "This is a deletion. This segment will now be junked."
 
@@ -820,7 +826,7 @@ def rearranger(genome_pairlist, num_rearr, mean_rearr_size, sd_rearr_size):
                 insert_sl = chrom_slyce_lists[my_chrom].extract(abs_pos, size_rearr)
 
                 chrom_slyce_lists[my_chrom] = chrom_slyce_lists[my_chrom].insert(abs_pos, insert_sl)
-                print "Chrom", my_chrom, "now looks like", chrom_slyce_lists[my_chrom]
+                #print "Chrom", my_chrom, "now looks like", chrom_slyce_lists[my_chrom]
             else: # is it a non-tandem, randomly inserted duplication?
                 print "This is a non-tandem duplication."
                 if random.getrandbits(1): 
@@ -837,7 +843,7 @@ def rearranger(genome_pairlist, num_rearr, mean_rearr_size, sd_rearr_size):
                 # print type(insert_sl), insert_sl
                 print "Duplicating segment into chrom", ins_chrom, "at pos", ins_pos
                 chrom_slyce_lists[ins_chrom] = chrom_slyce_lists[ins_chrom].insert(ins_pos, insert_sl)
-                print "Chrom", ins_chrom, "now looks like", chrom_slyce_lists[ins_chrom]
+                #print "Chrom", ins_chrom, "now looks like", chrom_slyce_lists[ins_chrom]
                 lens[ins_chrom] += size_rearr
                 sum_lens += size_rearr
         else: # is it an assisted translocation (transposon, etc...)?
@@ -845,9 +851,9 @@ def rearranger(genome_pairlist, num_rearr, mean_rearr_size, sd_rearr_size):
             new_parent, insert_sl = chrom_slyce_lists[my_chrom].excise(abs_pos, size_rearr)
             chrom_slyce_lists[my_chrom] = new_parent
             lens[my_chrom] -= size_rearr
-            sum_lens  -= size_rearr
+
             print "Excising segment:", insert_sl
-            print "Parent SlyceList is now:", new_parent
+            #print "Parent SlyceList is now:", new_parent
             if random.getrandbits(1): 
                 insert_sl = insert_sl.invert()
                 print "Inverting segment into", insert_sl
@@ -862,23 +868,28 @@ def rearranger(genome_pairlist, num_rearr, mean_rearr_size, sd_rearr_size):
             # print type(insert_sl), insert_sl
             print "Translocating segment into chrom", ins_chrom, "at pos", ins_pos
             chrom_slyce_lists[ins_chrom] = chrom_slyce_lists[ins_chrom].insert(ins_pos, insert_sl)
-            print "Chrom", ins_chrom, "now looks like", chrom_slyce_lists[ins_chrom]
+            #print "Chrom", ins_chrom, "now looks like", chrom_slyce_lists[ins_chrom]
             lens[ins_chrom] += size_rearr
-            sum_lens += size_rearr
 
-    #print "x:", x, sum_lens
 
-    # Reconstructing original chromosomes according to SlyceLists
+    print "x:", x, sum_lens
+
+    #Reconstructing original chromosomes according to SlyceLists
     new_genome_pairlist = []
     for i, (metadata, seq) in enumerate(genome_pairlist): 
-        new_seq = np.empty(lens[i], dtype='string')
+        new_seq = np.empty(chrom_slyce_lists[i].len(), dtype='string')         #TODO bug due to faulty len tracking (need to find!!)
+        print chrom_slyce_lists[i].len()
+
         loc = 0
         for s in chrom_slyce_lists[i].sl:
+            # print new_seq[loc:loc+s.len()]
+            # print genome_pairlist[s.l][1][s.i1:s.i2:s.i3]
             new_seq[loc:loc+s.len()] = genome_pairlist[s.l][1][s.i1:s.i2:s.i3]
             loc += s.len()
         new_genome_pairlist += [(metadata, new_seq)]
 
     for i, csl in enumerate(chrom_slyce_lists):
+        #print "L", i, csl.len()
         print "F", i, csl
 
     return new_genome_pairlist
