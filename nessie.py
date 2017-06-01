@@ -58,12 +58,13 @@ SD_INV_SIZE_HETERO = 603 # empirically estimated
 MEAN_INV_SIZE_HOMO = 2468 # empirically estimated
 SD_INV_SIZE_HOMO = 746 # empirically estimated
 
-LIKELIHOOD_INV = 0.35      #i #NO PARAMETERS #TODO compute these from rearr rate
-LIKELIHOOD_IO_REARR = 0.30 #q #NO PARAMETERS #TODO compute from rearr rate
-# does NOT vary with evo time; this depends on the basic o/e rearr rates
+LIKELIHOOD_INV = 0.267            #i #NO PARAMETERS #TODO compute these from rearr rate
+LIKELIHOOD_IO_REARR = 0.266       #q #NO PARAMETERS #TODO compute from rearr rate
+# does NOT vary with evolutionary time; they depend on the basic o/e rearr rates
 # is computable at start of modle
 
-LIKELIHOOD_TANDEM = 0.70   #t 
+LIKELIHOOD_ASSIST_TRANSLOC = 0.2 #a
+LIKELIHOOD_TANDEM = 0.70         #t 
 
 # Define command-line arguments.
 def parse_args():
@@ -101,6 +102,8 @@ def parse_args():
         help='Pr(duplication | rearrangement) = Pr(deletion | rearrangement) = "q" in our model.', required=False)
     parser.add_argument('-ltan','--likelihood_tandem', default=LIKELIHOOD_TANDEM, \
         help='Probability(tandem duplication | duplication) = "t" in our model.', required=False)
+    parser.add_argument('-lat','--likelihood_assist_transloc', default=LIKELIHOOD_ASSIST_TRANSLOC, \
+        help='Probability(assisted translocation | rearrangement) = "a" in our model.', required=False)
 
     parser.add_argument('-ros','--speciation_rate', default=TIME_LAMBDA, \
         help='Rate of speciation. Used to compute evolutionary time (t).', required=False)
@@ -140,6 +143,7 @@ def parse_args():
     args['likelihood_tandem'] = float(args['likelihood_tandem'])
     args['likelihood_inv'] = float(args['likelihood_inv'])
     args['likelihood_io_rearr'] = float(args['likelihood_io_rearr'])
+    args['likelihood_assist_transloc'] = float(args['likelihood_assist_transloc'])
     args['speciation_rate'] = float(args['speciation_rate'])
     args['freq_rearr_hetero'] = float(args['freq_rearr_hetero'])
     args['freq_rearr_homo'] = float(args['freq_rearr_homo'])
@@ -171,8 +175,12 @@ def parse_args():
         args['likelihood_tandem'] > 1 or args['likelihood_tandem'] < 0:
         sys.exit("ERROR: All probabilities must be >= 0 and <= 1.")
 
-    if abs(args['likelihood_inv']*2 + args['likelihood_io_rearr'] - 1) > 0.01:
-        sys.exit("ERROR: likelihood_inv*2 + likelihood_io_rearr ~= 1.0. \n" + 
+
+    if args['likelihood_inv'] < args['likelihood_io_rearr']:
+        sys.exit("ERROR: likelihood_inv < likelihood_io_rearr, leading to a negative probability in our model.\n" \
+            + "(i < q, thus P(random translocation | rearrangement) = i - q < 0)")
+    if abs(args['likelihood_inv']*2 + args['likelihood_io_rearr'] + args['likelihood_assist_transloc'] - 1) > 0.01:
+        sys.exit("ERROR: likelihood_inv*2 + likelihood_io_rearr + \n    likelihood_assist_transloc ~= 1.0. \n" + 
             "Please check your rearrangement modeling parameters and try again.")
 
     if args['size'] < 0:
@@ -180,7 +188,7 @@ def parse_args():
 
     if args['speciation_rate'] < 0:
         sys.exit("ERROR: Speciation rate must be positive.")
-        
+
     # if args['mean_freq_inv_hetero'] < 0 or args['sd_freq_inv_hetero'] < 0 or \
     #     args['mean_freq_inv_homo'] < 0 or args['sd_freq_inv_homo'] < 0:
     #     sys.exit("ERROR: Frequencies/standard deviations must be positive.")
@@ -225,6 +233,7 @@ SD_INV_SIZE_HOMO = args['sd_inv_size_homo']
 LIKELIHOOD_INV = args['likelihood_inv']
 LIKELIHOOD_TANDEM = args['likelihood_tandem']
 LIKELIHOOD_IO_REARR = args['likelihood_io_rearr']
+LIKELIHOOD_ASSIST_TRANSLOC = args['likelihood_assist_transloc']
 
 
 # homo- vs hetero- thallic constants ----------------------
@@ -288,7 +297,7 @@ for i, big_interval in enumerate(partition_base):
 PARTITION_LEN = len(partition_base) // NUM_PARTITIONS
 # PARTITIONS = np.array(([BIN_INDICES[i*PARTITION_LEN+PARTITION_LEN//2][from_i] + \
 #     [BIN_INDICES[i*PARTITION_LEN+PARTITION_LEN//2][to_i])/2.0 for i in range(NUM_PARTITIONS)])
-partition_indices = [i*PARTITION_LEN+PARTITION_LEN//2 for i in range(NUM_PARTITIONS)] # inaccurate rearr rate values here will matter...
+partition_indices = [i*PARTITION_LEN+PARTITION_LEN//2 for i in range(NUM_PARTITIONS)] # inaccurate rearr rate values here will matter; need to strip bad (centromeric/edge) values from the original dataset
 print len(sorted_rates)
 print partition_indices
 PARTITIONS = np.array([sorted_rates[pi] for pi in partition_indices])
@@ -397,7 +406,7 @@ SCAF_LENS = {} # initialized in main
 try: # Try reading the substitution matrix
     sm = np.loadtxt(open(SUB_MAT_FILE, "rb"), delimiter=",") # the substitution matrix
     NUM_PARTITIONS = 1
-    print "Using single partition model . . ."
+    print "Using single partition model for point mutations . . ."
     a_msr = sm[0][1] + sm[0][2] + sm[0][3]
     c_msr = sm[1][0] + sm[1][2] + sm[1][3]
     g_msr = sm[2][0] + sm[2][1] + sm[2][3]
@@ -726,7 +735,7 @@ def point_mut_multipartition(genome_pairlist, evolutionary_time):
 # CHROMOSOME REARRANGER -----------------------------------
 def rearranger(genome_pairlist, num_rearr, mean_rearr_size, sd_rearr_size):
     #TODO need to handle (rare) negative values (reselect from distribution)
-    #TODO need to make sure these values aren't > scaffold size (WE ASSUME THIS)
+    # these values can technically be > scaffold size (WE ASSUME THIS IS NOT THE CASE)
     # ^^ this is ludicrously unlikely; due to performance overhead, don't test for this
     rearr_sizes = np.round(np.random.normal(mean_rearr_size, sd_rearr_size, num_rearr)) \
         .astype(int)
@@ -747,9 +756,6 @@ def rearranger(genome_pairlist, num_rearr, mean_rearr_size, sd_rearr_size):
     chrom_partition_list = []
     for i, (metadata, seq) in enumerate(genome_pairlist): 
         chrom_slyce_lists += [SlyceList([Slyce(i, lens[i])])]
-        while True: # while we are still within this chromosome
-            # create a slyce from from_i to up_to of this chromosome and add it to chrom_partition_list
-            break
 
     #print lens
     x = sum_lens
@@ -806,7 +812,7 @@ def rearranger(genome_pairlist, num_rearr, mean_rearr_size, sd_rearr_size):
             else: # is it a deletion?
                 print "This is a deletion. This segment will now be junked."
 
-        else: # is it a duplication (extraction & pasting) event?
+        elif io_determiners[i][0] < LIKELIHOOD_INV*2 + LIKELIHOOD_IO_REARR: # is it a duplication (extraction & pasting) event?
             insert_sl = chrom_slyce_lists[my_chrom].extract(abs_pos, size_rearr)
             print "Extracting segment:", insert_sl
             if io_determiners[i][1] < LIKELIHOOD_TANDEM: # is it a tandem (postfix) duplication
@@ -834,13 +840,49 @@ def rearranger(genome_pairlist, num_rearr, mean_rearr_size, sd_rearr_size):
                 print "Chrom", ins_chrom, "now looks like", chrom_slyce_lists[ins_chrom]
                 lens[ins_chrom] += size_rearr
                 sum_lens += size_rearr
+        else: # is it an assisted translocation (transposon, etc...)?
+            print "This is an assisted translocation."
+            new_parent, insert_sl = chrom_slyce_lists[my_chrom].excise(abs_pos, size_rearr)
+            chrom_slyce_lists[my_chrom] = new_parent
+            lens[my_chrom] -= size_rearr
+            sum_lens  -= size_rearr
+            print "Excising segment:", insert_sl
+            print "Parent SlyceList is now:", new_parent
+            if random.getrandbits(1): 
+                insert_sl = insert_sl.invert()
+                print "Inverting segment into", insert_sl
+
+            ins_pos = np.random.randint(0, sum_lens) # absolute position of start loc of rearr
+            ins_chrom = 0 # chromosome where we are inserting
+            # print abs_pos
+            while lens[ins_chrom] <= ins_pos:
+                ins_pos -= lens[ins_chrom]
+                ins_chrom += 1
+
+            # print type(insert_sl), insert_sl
+            print "Translocating segment into chrom", ins_chrom, "at pos", ins_pos
+            chrom_slyce_lists[ins_chrom] = chrom_slyce_lists[ins_chrom].insert(ins_pos, insert_sl)
+            print "Chrom", ins_chrom, "now looks like", chrom_slyce_lists[ins_chrom]
+            lens[ins_chrom] += size_rearr
+            sum_lens += size_rearr
 
     #print "x:", x, sum_lens
 
-    #TODO need to actually modify original chromosomes lol
+    # Reconstructing original chromosomes according to SlyceLists
+    new_genome_pairlist = []
+    for i, (metadata, seq) in enumerate(genome_pairlist): 
+        new_seq = np.empty(lens[i], dtype='string')
+        loc = 0
+        for s in chrom_slyce_lists[i].sl:
+            new_seq[loc:loc+s.len()] = genome_pairlist[s.l][1][s.i1:s.i2:s.i3]
+            loc += s.len()
+        new_genome_pairlist += [(metadata, new_seq)]
 
     for i, csl in enumerate(chrom_slyce_lists):
         print "F", i, csl
+
+    return new_genome_pairlist
+
     #sys.exit(0)
 
 
