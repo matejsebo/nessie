@@ -420,6 +420,20 @@ class Slyce(object):
                 return True
         return False
 
+    # increase length of slyce by one (via postfix)
+    def add_one(self):
+        if self.i3 == 1:
+            self.i2 += 1
+        else: # if self.i3 == -1:
+            self.i1 -= 1
+
+    # decrease length of slyce by one (via postdel)
+    def zap_one(self):
+        if self.i3 == 1:
+            self.i2 -= 1
+        else: # if self.i3 == -1:
+            self.i1 += 1
+
     # The following function (used for debugging only!) assumes l in (l,len,i1,i2,i3) is a valid parent list
     def to_list(self):
         return self.l[self.to_slice()]
