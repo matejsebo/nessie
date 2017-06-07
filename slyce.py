@@ -320,8 +320,8 @@ def len_scaf(scaf_id):
     return len(scaf_id)
 
 class Slyce(object):
-    def __init__(self, l, length, i1=None, i2=None, i3=1):
-        self.l = l
+    def __init__(self, l, length, i1=None, i2=None, i3=1, p=0):
+        self.l = l # parent list identifier
 
         if i3 == None or i3 > 0:
             i3 = 1
@@ -335,21 +335,23 @@ class Slyce(object):
             self.i1, self.i2, self.i3 = i1, i2, i3
             
         self.length = length # length of the parent list
+        self.p = p # partition
 
     @staticmethod
-    def force_init(l, length, i1, i2, i3):
+    def force_init(l, length, i1, i2, i3, p=0):
         s = Slyce(l, length)
         s.i1 = i1
         s.i2 = i2
         s.i3 = i3
+        s.p = p
         return s
 
     @staticmethod
-    def blank_slice(l, length):
-        return Slyce(l, length, 0, 0, 1)
+    def blank_slice(l, length, p=0):
+        return Slyce(l, length, 0, 0, 1, p)
 
     def invert(self):
-        if self.i2 == self.i1: return Slyce.blank_slice(self.l, self.length)
+        if self.i2 == self.i1: return Slyce.blank_slice(self.l, self.length, self.p)
         new_i1, new_i2, new_i3 = None, None, None
         if self.i3 == 1:
             new_i1 = None if self.i2 == None or self.i2 < 0 else self.i2-1
@@ -360,9 +362,9 @@ class Slyce(object):
             new_i2 = None if self.i1 == None else self.i1+1
             new_i3 = 1
 
-        if self.i2 == -1 and self.i1 != -1 and new_i3 == 1: return Slyce.blank_slice(self.l, self.length)
-        if new_i2 == -1 and new_i1 != -1 and self.i3 == 1: return Slyce.force_init(self.l, self.length, new_i1, None, new_i3)
-        return Slyce(self.l, self.length, new_i1, new_i2, new_i3)
+        if self.i2 == -1 and self.i1 != -1 and new_i3 == 1: return Slyce.blank_slice(self.l, self.length, self.p)
+        if new_i2 == -1 and new_i1 != -1 and self.i3 == 1: return Slyce.force_init(self.l, self.length, new_i1, None, new_i3, self.p)
+        return Slyce(self.l, self.length, new_i1, new_i2, new_i3, self.p)
 
     def all_after_pos(self, pos): # INCLUSIVE W. RESPECT TO POS
         # print pos, self.i1, self.i2
@@ -373,8 +375,8 @@ class Slyce(object):
             new_i1 = self.i1 - pos
             new_i2 = self.i2
         if new_i2 == None or new_i2 <= -1:
-            return Slyce.force_init(self.l, self.length, new_i1, None, self.i3)
-        return Slyce(self.l, self.length, new_i1, new_i2, self.i3)
+            return Slyce.force_init(self.l, self.length, new_i1, None, self.i3, self.p)
+        return Slyce(self.l, self.length, new_i1, new_i2, self.i3, self.p)
 
     def all_before_pos(self, pos): # NON-INCLUSIVE W. RESPECT TO POS
         # print pos, self.i1, self.i2
@@ -385,8 +387,8 @@ class Slyce(object):
             new_i1 = self.i1
             new_i2 = self.i1 - pos 
         if new_i2 == None or new_i2 <= -1:
-            return Slyce.force_init(self.l, self.length, new_i1, None, self.i3)
-        return Slyce(self.l, self.length, new_i1, new_i2, self.i3)
+            return Slyce.force_init(self.l, self.length, new_i1, None, self.i3, self.p)
+        return Slyce(self.l, self.length, new_i1, new_i2, self.i3, self.p)
 
     # This function assumes pos1 < pos2
     def all_between_pos(self, pos1, pos2): # INCLUSIVE W. RESPECT TO POS1, NON-INCLUSIVE W. RESPECT TO POS2
@@ -398,8 +400,8 @@ class Slyce(object):
             new_i1 = self.i1-pos1
             new_i2 = self.i1-pos2
         if new_i2 == None or new_i2 <= -1:
-            return Slyce.force_init(self.l, self.length, new_i1, None, self.i3)
-        return Slyce(self.l, self.length, new_i1, new_i2, self.i3)
+            return Slyce.force_init(self.l, self.length, new_i1, None, self.i3, self.p)
+        return Slyce(self.l, self.length, new_i1, new_i2, self.i3, self.p)
 
     def len(self):
         return abs(self.i1-(-1 if self.i2 == None else self.i2))
@@ -439,7 +441,7 @@ class Slyce(object):
         return self.l[self.to_slice()]
 
     def __str__(self):
-        return "Slyce" + str((self.l, self.length, (self.i1, self.i2, self.i3)))
+        return "Slyce" + str((self.l, self.length, (self.i1, self.i2, self.i3), self.p))
 
 class SlyceList(object):
     def __init__(self, l=None):

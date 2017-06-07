@@ -301,7 +301,7 @@ partition_indices = [i*PARTITION_LEN+PARTITION_LEN//2 for i in range(NUM_PARTITI
 print len(sorted_rates)
 print partition_indices
 PARTITIONS = np.array([sorted_rates[pi] for pi in partition_indices])
-
+print BIN_INDICES
 print PARTITIONS
 
 #print PARTITIONS
@@ -524,9 +524,50 @@ def main():
     print "Reading common ancestor genome . . ."
     np_genome = []
 
+    genome_len = sum([len(seq) for metadata, seq in anc_genome.items()])
+    print "Genome has length", genome_len
+    abs_pos = 0
+    i_abs = 0
+    sum_bin_lens = 0
+    prev_remaining = 0
+    prev_p = 0
     for i, (metadata, seq) in enumerate(anc_genome.items()): 
-        np_genome += [[metadata, np.array(list(seq)), SlyceList([Slyce(i, len(seq))])]]
+        sl_bins = [] if i == 0 else [Slyce(i, chrom_len, 0, prev_remaining, \
+             1, prev_p)]
+        i_chrom = 0 if i == 0 else 1
+        pos_in_chrom = 0 if i == 0 else sl_bins[0].len()
+        chrom_len = len(seq)
+        while pos_in_chrom+BIN_INDICES[i_abs][1]-BIN_INDICES[i_abs][0] < chrom_len \
+            and abs_pos+BIN_INDICES[i_abs][1]-BIN_INDICES[i_abs][0] < genome_len:
+            this_bin = Slyce(i, chrom_len, pos_in_chrom, pos_in_chrom + BIN_INDICES[i_abs][1] - BIN_INDICES[i_abs][0], \
+                1, BIN_INDICES[i_abs][2])
+            bin_len = this_bin.len()
+
+            sl_bins += [this_bin]
+            i_chrom += 1
+            i_abs += 1
+            pos_in_chrom += bin_len
+            abs_pos += bin_len
+        final_bin = Slyce(i, chrom_len, pos_in_chrom, chrom_len, \
+             1, BIN_INDICES[i_abs][2])
+        prev_remaining = BIN_INDICES[i_abs][1] - BIN_INDICES[i_abs][0] - final_bin.len()
+        prev_p = BIN_INDICES[i_abs][2]
+        sl_bins += [final_bin]
+        pos_in_chrom += final_bin.len()
+        pos_in_chrom += final_bin.len()
+
+        # print SlyceList(sl_bins).len(), len(seq)
+        sum_bin_lens += SlyceList(sl_bins).len()
+        # print SlyceList(sl_bins)
+        # if i == 1:
+        #     sys.exit(0)
+        #np_genome += [[metadata, np.array(list(seq)), SlyceList([Slyce(i, len(seq))])]]
+        np_genome += [[metadata, np.array(list(seq)), SlyceList(sl_bins)]]
     
+    
+    print genome_len, sum_bin_lens
+
+    # sys.exit()
     # for i, b in enumerate(bin_slyces):
     #     print "F", i, b
     # sys.exit(0)
@@ -943,7 +984,6 @@ def rearranger(genome_triplist, num_rearr, mean_rearr_size, sd_rearr_size):
             chrom_slyce_lists[ins_chrom] = chrom_slyce_lists[ins_chrom].insert(ins_pos, insert_sl)
             #print "Chrom", ins_chrom, "now looks like", chrom_slyce_lists[ins_chrom]
             lens[ins_chrom] += size_rearr
-
 
     print "x:", x, sum_lens
 
