@@ -278,27 +278,23 @@ PARTITIONS = np.zeros(shape=(NUM_PARTITIONS, )) # mean rearrangement probabiliti
 BIN_LEN = 7000 #TODO compute or parametrize this!
 sum_num_partitions = np.zeros(shape=(NUM_PARTITIONS, ))
 
-
-#TODO zap all the rates that are clearly bad (centromeres, ends of chroms)
-
-
+#TODO zap all the rates that are clearly bad (centromeres, ends of chroms) (we are currently thresholding only really high rates away)
 
 averaged_rates = [(float(partition_base[i][max_rate]) + \
     float(partition_base[i][min_rate]))/2.0 for i in range(num_bins)]
 averaged_rates = [min(a, TOP_RATE) for a in averaged_rates]
 sorted_rates = np.array(list(sorted(averaged_rates)))
 threshold_indices = [(i_bin+1)*num_bins // NUM_PARTITIONS for i_bin in range(NUM_PARTITIONS-1)]
-print threshold_indices, len(averaged_rates)
-print sorted_rates
+# print threshold_indices, len(averaged_rates)
+# print sorted_rates
 thresholds = np.array([sorted_rates[ti] for ti in threshold_indices])
-print thresholds
+# print thresholds
 
 for i, big_interval in enumerate(partition_base):
     big_interval_len = int(big_interval[end]) - int(big_interval[start])
     av_rearr_rate = (float(partition_base[i][max_rate]) + float(partition_base[i][min_rate]))/2.0
     BIN_INDICES[i][from_i] = 0 if i==0 else BIN_INDICES[i-1][up_to]
     BIN_INDICES[i][up_to] = int(big_interval[start]) + 3 * big_interval_len / 5
-    
     BIN_INDICES[i][partition_index] = np.searchsorted(thresholds, av_rearr_rate)
     #print av_rearr_rate, thresholds, BIN_INDICES[i][partition_index]
     #PARTITIONS[BIN_INDICES[i][partition_index]] += av_rearr_rate
@@ -308,11 +304,13 @@ PARTITION_LEN = len(partition_base) // NUM_PARTITIONS
 # PARTITIONS = np.array(([BIN_INDICES[i*PARTITION_LEN+PARTITION_LEN//2][from_i] + \
 #     [BIN_INDICES[i*PARTITION_LEN+PARTITION_LEN//2][to_i])/2.0 for i in range(NUM_PARTITIONS)])
 partition_indices = [i*PARTITION_LEN+PARTITION_LEN//2 for i in range(NUM_PARTITIONS)] # inaccurate rearr rate values here will matter; need to strip bad (centromeric/edge) values from the original dataset
-print len(sorted_rates)
-print partition_indices
+# print len(sorted_rates)
+# print partition_indices
 PARTITIONS = np.array([sorted_rates[pi] for pi in partition_indices])
-print BIN_INDICES
-print PARTITIONS
+PARTITION_PROBS = PARTITIONS / sum(PARTITIONS)
+# print BIN_INDICES
+# print PARTITIONS
+# print PARTITION_PROBS
 
 #print PARTITIONS
 #sys.exit(0)
@@ -574,7 +572,7 @@ def main():
         #np_genome += [[metadata, np.array(list(seq)), SlyceList([Slyce(i, len(seq))])]]
         np_genome += [[metadata, np.array(list(seq)), SlyceList(sl_bins)]]
     
-    print genome_len, sum_bin_lens
+    # print genome_len, sum_bin_lens
 
     # sys.exit()
     # for i, b in enumerate(bin_slyces):
@@ -681,7 +679,7 @@ def single_partition_mutator(scaffold_triple):
     scaf_len = len(sequence)
     base_nums = cl.Counter(sequence)
     print "    Mutating scaffold " + metadata.split(' ')[0]
-    print bins.len(), len(sequence)
+    # print bins.len(), len(sequence)
     poissons = [pmf_poisson(lambda_sub, i) for i in range(1,TOP_POISSON+1)]
     num_muts = {}
     coord_set_dict = {}
@@ -818,7 +816,7 @@ def single_partition_mutator(scaffold_triple):
     elif len(new_sequence) < bins.len():
         new_sequence = np.array(list(new_sequence) + [random.choice(BASES) for i in range(bins.len()-len(new_sequence))])
 
-    print bins.len(), len(new_sequence)
+    # print bins.len(), len(new_sequence)
     return metadata, new_sequence, bins
 
 # def multipartition_mutator(scaffold_triple):
@@ -832,8 +830,8 @@ def pmf_poisson(lambda_m, k):
 def point_mut_single_partition(genome_triplist, lambda_sub, lambda_ins, lambda_del): 
     print "Generating point mutations using single partition model."
     # Use mutator(scaff) on all scaff in scaffolds
-    #pool = Pool(NUM_PROCESSORS)
-    mapped_vals = map(single_partition_mutator, \
+    pool = Pool(NUM_PROCESSORS)
+    mapped_vals = pool.map(single_partition_mutator, \
         [[p[0], p[1], p[2], float(lambda_sub), float(lambda_ins), float(lambda_del)] \
         for p in genome_triplist])
     #   sys.exit(0)
@@ -859,13 +857,13 @@ def rearranger(genome_triplist, num_rearr, mean_rearr_size, sd_rearr_size):
     rearr_sizes = np.round(np.random.normal(mean_rearr_size, sd_rearr_size, num_rearr)) \
         .astype(int)
 
-    print genome_triplist
+    # print genome_triplist
     metadata = [m for m, s, b in genome_triplist]
     seq = [s for m, s, b in genome_triplist]
     bins = [b for m, s, b in genome_triplist]
 
-    # Nx2 array of random numbers in (0, 1] used in the rearrangement model
-    io_determiners = np.random.random_sample((num_rearr,2))
+    # Nx3 array of random numbers in (0, 1] used in the rearrangement model
+    io_determiners = np.random.random_sample((num_rearr,3))
     # lengths of each chromosome
     lens = [len(s) for s in seq]
     sum_lens = sum(lens)
@@ -888,18 +886,33 @@ def rearranger(genome_triplist, num_rearr, mean_rearr_size, sd_rearr_size):
 
     for i in range(num_rearr): # perform the ith rearrangement
         print "Performing rearrangement #" + str(i), "--------------------------------------------"
-        size_rearr = abs(rearr_sizes[i]) # grab the ith rearrangement size #TODO fix trivial positivization
+        size_rearr = rearr_sizes[i] # grab the ith rearrangement size
+        while size_rearr < 0: # make sure it's not negative! (possible under conditions of normal distribution)
+            size_rearr = int(np.random.normal(mean_rearr_size, sd_rearr_size, num_rearr))
         sum_poss_start_loc = sum_lens - num_scaff * size_rearr
 
-        # Single partition uniform
-        abs_pos = np.random.randint(0, sum_poss_start_loc) # absolute position of start loc of rearr
-        
+        # # Single partition uniform uses the following locator: 
+        # abs_pos = np.random.randint(0, sum_poss_start_loc) # absolute position of start loc of rearr
 
+        # N-bin partition rearranger uses the following locator: 
+        print np.searchsorted(np.cumsum(PARTITION_PROBS), io_determiners[i][2], side='left')
+        partition = np.searchsorted(np.cumsum(PARTITION_PROBS), io_determiners[i][2])
+        partition_len = sum([chrom_slyce_lists[k].len_partition(partition) for k in range(num_scaff)])
 
-        my_chrom = 0        # print abs_pos
-        while lens[my_chrom] - size_rearr + 1 < abs_pos:
-            abs_pos -= (lens[my_chrom] - size_rearr + 1)
+        print io_determiners[i][2], PARTITION_PROBS, partition
+        print num_scaff
+        print [chrom_slyce_lists[i].len_partition(partition) for i in range(num_scaff)]
+        print chrom_slyce_lists[0].len_partition(1)
+        print chrom_slyce_lists[0].len()
+
+        print "partition_len", partition_len
+        partition_pos = np.random.randint(0, partition_len) # absolute position of start loc of rearr WITHIN THE PARTITION
+        my_chrom = 0
+        while chrom_slyce_lists[my_chrom].len_partition(partition) - size_rearr + 1 < partition_pos:
+            partition_pos -= (chrom_slyce_lists[my_chrom].len_partition(partition) - size_rearr + 1)
             my_chrom += 1
+
+        abs_pos = chrom_slyce_lists[my_chrom].partition_pos_to_abs_pos(partition, partition_pos)
 
         #print "Chrom", my_chrom, "looks like", chrom_slyce_lists[my_chrom]
         print "From chrom", str(my_chrom) + ", length=(" + str(lens[my_chrom]) + ") at position", abs_pos, "grab length", size_rearr
@@ -996,27 +1009,27 @@ def rearranger(genome_triplist, num_rearr, mean_rearr_size, sd_rearr_size):
             #print "Chrom", ins_chrom, "now looks like", chrom_slyce_lists[ins_chrom]
             lens[ins_chrom] += size_rearr
 
-    print "x:", x, sum_lens
+    # print "x:", x, sum_lens
 
-    f = open('slycelist'+str(num_rearr) + '.txt', 'w')
-    for i, csl in enumerate(chrom_slyce_lists):
-        #print "L", i, csl.len()
-        f.write(str(i))
-        f.write(str(csl))
-    f.close()
+    # f = open('slycelist'+str(num_rearr) + '.txt', 'w')
+    # for i, csl in enumerate(chrom_slyce_lists):
+    #     #print "L", i, csl.len()
+    #     f.write(str(i))
+    #     f.write(str(csl))
+    # f.close()
 
     #Reconstructing original chromosomes according to SlyceLists
     new_genome_triplist = []
     for i, (metadata, seq, old_bins) in enumerate(genome_triplist): 
         new_seq = np.empty(chrom_slyce_lists[i].len(), dtype='string')         #TODO bug due to faulty len tracking (need to find!!) squashed???
-        print 'csl', chrom_slyce_lists[i].len(), 
+        # print 'csl', chrom_slyce_lists[i].len(), 
 
         loc = 0
         for s in chrom_slyce_lists[i].sl:
             # print new_seq[loc:loc+s.len()]
             # print genome_triplist[s.l][1][s.i1:s.i2:s.i3]
 
-            print loc, s.len(), s.l, s.i1, s.i2, s.i3, len(genome_triplist[s.l][1]), len(new_seq)
+            # print loc, s.len(), s.l, s.i1, s.i2, s.i3, len(genome_triplist[s.l][1]), len(new_seq)
             if len(genome_triplist[s.l][1][s.i1:s.i2:s.i3]) < len(new_seq[loc:loc+s.len()]):
                 new_seq[loc:loc+len(genome_triplist[s.l][1][s.i1:s.i2:s.i3])] = genome_triplist[s.l][1][s.i1:s.i2:s.i3]
             elif len(genome_triplist[s.l][1][s.i1:s.i2:s.i3]) > len(new_seq[loc:loc+s.len()]):

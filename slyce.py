@@ -575,6 +575,20 @@ class SlyceList(object):
                 total += s.len()
         return total
 
+    # Convert a partition-based position (assumed to be valid) into an absolute position within this SlyceList.
+    def partition_pos_to_abs_pos(self, p, partition_pos):
+        total_bases = 0
+        slyce_index = 0
+        while total_bases < partition_pos and slyce_index < len(self.sl):
+            if self.sl[slyce_index].p == p:
+                total_bases += self.sl[slyce_index].len()
+            slyce_index += 1
+        slyce_index -= 1
+
+        if slyce_index == -1:
+            total_bases = self.sl[slyce_index].len()
+        return total_bases
+
     # The following functions (used ONLY for debugging) assume l in (l,i1,i2,i3) is a valid parent list
     def to_list(self):
         all_slyces = []
