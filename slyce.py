@@ -551,7 +551,6 @@ class SlyceList(object):
         for s in self.sl:
             if s.i1 != s.i2 and (s.i1 == None or s.i1 > -1) and (s.i2 == None or s.i2 >= -1):
                 new_s += [s]
-
         return SlyceList(new_s)
 
     # If back-to-back slyces are contiguous and the SlyceList can be shortened, do so (and modify self).
@@ -567,6 +566,14 @@ class SlyceList(object):
                 new_sl += [added_slyce]
                 top_index += 1
         self.sl = new_sl
+
+    # The length of all slyces inside this SlyceList that belong to partition p.
+    def len_partition(self, p):
+        total = 0
+        for s in self.sl:
+            if s.p == p:
+                total += s.len()
+        return total
 
     # The following functions (used ONLY for debugging) assume l in (l,i1,i2,i3) is a valid parent list
     def to_list(self):
