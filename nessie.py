@@ -775,7 +775,9 @@ def single_partition_mutator(scaffold_triple):
     ni = 0 # index in old master sequence
     is_ins = False
     new_sequence = np.empty(shape=(scaf_len + len(ins_indexes) - len(del_indexes)), dtype=str)
-    
+    for s in bins.sl:
+        s.length = len(new_sequence)
+
     # print len(ins_indexes), len(del_indexes)
     while di < len(del_indexes) and ii < len(ins_indexes):
         if di >= len(del_indexes) or ins_indexes[ii][0] < del_indexes[di]: # handle insertion
@@ -996,24 +998,33 @@ def rearranger(genome_triplist, num_rearr, mean_rearr_size, sd_rearr_size):
 
     print "x:", x, sum_lens
 
+    f = open('slycelist'+str(num_rearr) + '.txt', 'w')
+    for i, csl in enumerate(chrom_slyce_lists):
+        #print "L", i, csl.len()
+        f.write(str(i))
+        f.write(str(csl))
+    f.close()
+
     #Reconstructing original chromosomes according to SlyceLists
     new_genome_triplist = []
     for i, (metadata, seq, old_bins) in enumerate(genome_triplist): 
         new_seq = np.empty(chrom_slyce_lists[i].len(), dtype='string')         #TODO bug due to faulty len tracking (need to find!!) squashed???
-        print chrom_slyce_lists[i].len()
+        print 'csl', chrom_slyce_lists[i].len(), 
 
         loc = 0
         for s in chrom_slyce_lists[i].sl:
             # print new_seq[loc:loc+s.len()]
             # print genome_triplist[s.l][1][s.i1:s.i2:s.i3]
-            new_seq[loc:loc+s.len()] = genome_triplist[s.l][1][s.i1:s.i2:s.i3]
+
+            print loc, s.len(), s.l, s.i1, s.i2, s.i3, len(genome_triplist[s.l][1]), len(new_seq)
+            if len(genome_triplist[s.l][1][s.i1:s.i2:s.i3]) < len(new_seq[loc:loc+s.len()]):
+                new_seq[loc:loc+len(genome_triplist[s.l][1][s.i1:s.i2:s.i3])] = genome_triplist[s.l][1][s.i1:s.i2:s.i3]
+            elif len(genome_triplist[s.l][1][s.i1:s.i2:s.i3]) > len(new_seq[loc:loc+s.len()]):
+                new_seq[loc:loc+s.len()] = genome_triplist[s.l][1][s.i1:s.i2:s.i3][0:s.len()]
+            else:
+                new_seq[loc:loc+s.len()] = genome_triplist[s.l][1][s.i1:s.i2:s.i3]
             loc += s.len()
         new_genome_triplist += [(metadata, new_seq, chrom_slyce_lists[i])]
-
-    for i, csl in enumerate(chrom_slyce_lists):
-        #print "L", i, csl.len()
-        print "F", i, csl
-
 
     # print list(enumerate(genome_triplist))
     # for i, (old_m, old_seq) in enumerate(genome_triplist): 
