@@ -264,6 +264,8 @@ end = 1
 min_rate = 2
 max_rate = 3
 
+TOP_RATE = 0.002
+
 # indices within BIN_INDICES
 from_i = 0 # from which base does this bin refer to?
 up_to = 1 # up-to which base does this bin refer to?
@@ -278,10 +280,16 @@ sum_num_partitions = np.zeros(shape=(NUM_PARTITIONS, ))
 
 
 #TODO zap all the rates that are clearly bad (centromeres, ends of chroms)
-averaged_rates = [(float(partition_base[i][max_rate]) - \
+
+
+
+averaged_rates = [(float(partition_base[i][max_rate]) + \
     float(partition_base[i][min_rate]))/2.0 for i in range(num_bins)]
+averaged_rates = [min(a, TOP_RATE) for a in averaged_rates]
 sorted_rates = np.array(list(sorted(averaged_rates)))
 threshold_indices = [(i_bin+1)*num_bins // NUM_PARTITIONS for i_bin in range(NUM_PARTITIONS-1)]
+print threshold_indices, len(averaged_rates)
+print sorted_rates
 thresholds = np.array([sorted_rates[ti] for ti in threshold_indices])
 print thresholds
 
@@ -290,7 +298,9 @@ for i, big_interval in enumerate(partition_base):
     av_rearr_rate = (float(partition_base[i][max_rate]) + float(partition_base[i][min_rate]))/2.0
     BIN_INDICES[i][from_i] = 0 if i==0 else BIN_INDICES[i-1][up_to]
     BIN_INDICES[i][up_to] = int(big_interval[start]) + 3 * big_interval_len / 5
+    
     BIN_INDICES[i][partition_index] = np.searchsorted(thresholds, av_rearr_rate)
+    #print av_rearr_rate, thresholds, BIN_INDICES[i][partition_index]
     #PARTITIONS[BIN_INDICES[i][partition_index]] += av_rearr_rate
     #sum_num_partitions[BIN_INDICES[i][partition_index]] += 1
 
@@ -563,7 +573,6 @@ def main():
         #     sys.exit(0)
         #np_genome += [[metadata, np.array(list(seq)), SlyceList([Slyce(i, len(seq))])]]
         np_genome += [[metadata, np.array(list(seq)), SlyceList(sl_bins)]]
-    
     
     print genome_len, sum_bin_lens
 
