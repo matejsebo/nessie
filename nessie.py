@@ -303,7 +303,6 @@ print partition_indices
 PARTITIONS = np.array([sorted_rates[pi] for pi in partition_indices])
 
 print PARTITIONS
-print BIN_INDICES
 
 #print PARTITIONS
 #sys.exit(0)
@@ -318,7 +317,6 @@ BASES = [A, C, G, T]
 NUM_BASES = len(BASES)
 BASE_MAP = {A:0, C:1, G:2, T:3}
 acgt = [A, C, G, T]
-SCAF_LENS = {} # initialized in main
 
 # partition handling --------------------------------------
 # The following is for point mutation partitioning and can be ignored for now
@@ -460,7 +458,7 @@ class TreeNode(object): # An object that represents a node in a phylogenetic tre
         self.branch_name = branch_name # name of this node
         self.state = state # Homo or Hetero -thallic
         s = 0
-        for meta, seq in genome:
+        for meta, seq, bins in genome:
             s += seq.size
         self.size = s
 
@@ -507,9 +505,9 @@ class TreeNode(object): # An object that represents a node in a phylogenetic tre
             export_genome(self.genome, OUT_DIRECTORY + self.branch_name + s + ".fasta")
 
 def main():
-    # This script stores fasta files as pairlists using the metadata as the first
+    # This script stores fasta files as triplists using the metadata as the first
     # value and the sequences as the second value (in numpy array form). All evolution-related 
-    # operations are then performed on these pairlists. 
+    # operations are then performed on these triplists. 
 
     anc_genome = fasta_to_dict(IN_FILE)
     
@@ -526,10 +524,12 @@ def main():
     print "Reading common ancestor genome . . ."
     np_genome = []
 
-    for metadata, seq in anc_genome.items(): 
-        np_genome += [[metadata, np.array(list(seq))]]
-        # print np_genome[metadata]
-        SCAF_LENS[metadata] = len(seq)
+    for i, (metadata, seq) in enumerate(anc_genome.items()): 
+        np_genome += [[metadata, np.array(list(seq)), SlyceList([Slyce(i, len(seq))])]]
+    
+    # for i, b in enumerate(bin_slyces):
+    #     print "F", i, b
+    # sys.exit(0)
 
 
     # Fork the genome recursively to generate a tree DEPTH deep, 
@@ -599,7 +599,7 @@ def fork_genome(node, branch_name, depth):
     #sys.exit(0)
 
     # After evolution finishes, create a new node for the new organism...
-    new_node = TreeNode(new_genome, branch_name, thallic)
+    new_node = TreeNode(rearr_genome, branch_name, thallic)
     new_node.t = t
     new_node.rho = rho
     new_node.num_rearr = rearrangements
@@ -626,11 +626,12 @@ def homo_or_hetero_thallic(current_state):
 # POINT MUTATION GENERATOR --------------------------------
 
 def single_partition_mutator(scaffold_triple):
-    metadata, sequence, lambda_sub, lambda_ins, lambda_del = scaffold_triple
+    metadata, sequence, bins, lambda_sub, lambda_ins, lambda_del = scaffold_triple
+
     scaf_len = len(sequence)
     base_nums = cl.Counter(sequence)
     print "    Mutating scaffold " + metadata.split(' ')[0]
-
+    print bins.len(), len(sequence)
     poissons = [pmf_poisson(lambda_sub, i) for i in range(1,TOP_POISSON+1)]
     num_muts = {}
     coord_set_dict = {}
@@ -693,57 +694,121 @@ def single_partition_mutator(scaffold_triple):
         for index in coord_set_dict[b]:
             sequence[index] = b
 
-    for i in del_indexes: # delete stuff here...
-        sequence[i] = ""
-    for i in ins_indexes: # handle insertion tuples here...
-        sequence[i[0]] = sequence[i[0]] + i[1]
+    # for i in del_indexes: # delete stuff here...
+    #     sequence[i] = ""
+    #     si, tot_bases = bins.slyce_index_at_abs_pos(i)
+    #     
+    # for i in ins_indexes: # handle insertion tuples here...
+    #     print "SI", sequence[i[0]]
+    #     print i[1]
+    #     print sequence[i[0]] + i[1]
+    #     sequence[i[0]] = sequence[i[0]] + i[1]
+    #     print "SQ", sequence[i[0]]
+    #     sys.exit(0)
+    #     si, tot_bases = bins.slyce_index_at_abs_pos(i)
+    #     bins.sl[si].add_one()
+    ins_indexes = list(sorted(ins_indexes, key=lambda inst: inst[0]))
+    del_indexes = list(sorted(del_indexes))
 
-    # The following line is a huge runtime sink:
-    sequence = np.array(list("".join(sequence))) # recreate array
+    # # The following line is a huge runtime sink:
+    # sequence = np.array(list("".join(sequence))) # recreate array
 
-    return metadata, sequence
+    ii = 0 # insertion list index
+    di = 0 # deletion list index
+    oi = 0 # index in new master sequence
+    ni = 0 # index in old master sequence
+    is_ins = False
+    new_sequence = np.empty(shape=(scaf_len + len(ins_indexes) - len(del_indexes)), dtype=str)
+    
+    # print len(ins_indexes), len(del_indexes)
+    while di < len(del_indexes) and ii < len(ins_indexes):
+        if di >= len(del_indexes) or ins_indexes[ii][0] < del_indexes[di]: # handle insertion
+            #print "i.", ii, ins_indexes[ii]
+            bins.sl[bins.slyce_index_at_abs_pos(ii)[0]].add_one()
+            #print oi, ins_indexes[ii][0] , ni
+            #print oi + ins_indexes[ii][0] - ni
+            new_sequence[ni:ins_indexes[ii][0]] = sequence[oi:oi + ins_indexes[ii][0] - ni]
+            new_sequence[ins_indexes[ii][0]] = ins_indexes[ii][1]
+            oi = oi + ins_indexes[ii][0] - ni
+            ni = ins_indexes[ii][0] + 1
+            ii += 1
+            #print "i", ii, "d", di, "o", oi, "n", ni
+        else: # handle deletion
+            #print "d.", di, del_indexes[di]
+            bins.sl[bins.slyce_index_at_abs_pos(di)[0]].zap_one()
+            #print oi, del_indexes[di] , ni
+            #print oi + del_indexes[di] - ni
+            new_sequence[ni:del_indexes[di] - 1] = sequence[oi:oi + del_indexes[di] - 1 - ni]
+            oi = oi + del_indexes[di] - 1 - ni
+            ni = del_indexes[di]
+            di += 1
+            #print "i", ii, "d", di, "o", oi, "n", ni
+    ti = max(oi, ni) # top index
+    new_sequence[ti:len(new_sequence)] = sequence[oi:oi+len(new_sequence)-ti]
 
-def multipartition_mutator(scaffold_triple):
-    metadata, sequence, lambda_sub, lambda_ins, lambda_del = scaffold_triple
-    return metadata, sequence
+    # print new_sequence, len(new_sequence)
+
+    # if len(new_sequence) != bins.len():
+    #     print "ERROR: Misaligned bins.", len(new_sequence), "!=", bins.len()
+    #     sys.exit(0)
+
+
+    new_sequence = np.array([x for x in new_sequence if x != ''])
+
+    # print new_sequence, len(new_sequence)
+
+    #print len(ins_indexes), len(del_indexes)
+    #print bins.len(), len(sequence)
+
+    return metadata, new_sequence, bins
+
+# def multipartition_mutator(scaffold_triple):
+#     metadata, sequence, lambda_sub, lambda_ins, lambda_del = scaffold_triple
+#     return metadata, sequence
 
 def pmf_poisson(lambda_m, k):
     return m.exp(-lambda_m) * lambda_m**k / m.factorial(k)
 
-# simulates point mutations (base changes, insertions, deletions) in a genome pairlist
-def point_mut_single_partition(genome_pairlist, lambda_sub, lambda_ins, lambda_del): 
+# simulates point mutations (base changes, insertions, deletions) in a genome triplist
+def point_mut_single_partition(genome_triplist, lambda_sub, lambda_ins, lambda_del): 
     print "Generating point mutations using single partition model."
     # Use mutator(scaff) on all scaff in scaffolds
-    pool = Pool(NUM_PROCESSORS)
-    mapped_vals = pool.map(single_partition_mutator, \
-        [[p[0], p[1], float(lambda_sub), float(lambda_ins), float(lambda_del)] \
-        for p in genome_pairlist])
+    #pool = Pool(NUM_PROCESSORS)
+    mapped_vals = map(single_partition_mutator, \
+        [[p[0], p[1], p[2], float(lambda_sub), float(lambda_ins), float(lambda_del)] \
+        for p in genome_triplist])
+    sys.exit(0)
     return mapped_vals
 
-# same as above, but uses the multipartition model
-def point_mut_multipartition(genome_pairlist, evolutionary_time):
-    # multipartition MapReduce
-    print "Generating point mutations using " + str(NUM_PARTITIONS) + "-partition model."
-    # pool = Pool(NUM_PROCESSORS)
+# # same as above, but uses the multipartition model
+# def point_mut_multipartition(genome_triplist, evolutionary_time):
+#     # multipartition MapReduce
+#     print "Generating point mutations using " + str(NUM_PARTITIONS) + "-partition model."
+#     # pool = Pool(NUM_PROCESSORS)
 
 
-    mapped_vals = map(multipartition_mutator, \
-        [[p[0], p[1], float(lambda_sub), float(lambda_ins), float(lambda_del)] \
-        for p in genome_pairlist])
-    return mapped_vals
+#     mapped_vals = map(multipartition_mutator, \
+#         [[p[0], p[1], float(lambda_sub), float(lambda_ins), float(lambda_del)] \
+#         for p in genome_triplist])
+#     return mapped_vals
 
 # CHROMOSOME REARRANGER -----------------------------------
-def rearranger(genome_pairlist, num_rearr, mean_rearr_size, sd_rearr_size):
+def rearranger(genome_triplist, num_rearr, mean_rearr_size, sd_rearr_size):
     #TODO need to handle (rare) negative values (reselect from distribution)
     # these values can technically be > scaffold size (WE ASSUME THIS IS NOT THE CASE)
     # ^^ this is ludicrously unlikely; due to performance overhead, don't test for this
     rearr_sizes = np.round(np.random.normal(mean_rearr_size, sd_rearr_size, num_rearr)) \
         .astype(int)
 
+    print genome_triplist
+    metadata = [m for m, s, b in genome_triplist]
+    seq = [s for m, s, b in genome_triplist]
+    bins = [b for m, s, b in genome_triplist]
+
     # Nx2 array of random numbers in (0, 1] used in the rearrangement model
     io_determiners = np.random.random_sample((num_rearr,2))
     # lengths of each chromosome
-    lens = [len(seq) for metadata, seq in genome_pairlist]
+    lens = [len(s) for s in seq]
     sum_lens = sum(lens)
     num_scaff = len(lens)
 
@@ -752,10 +817,12 @@ def rearranger(genome_pairlist, num_rearr, mean_rearr_size, sd_rearr_size):
 
     # print rearr_sizes
 
-    chrom_slyce_lists = [] # List of slyce lists for each chromosome
-    chrom_partition_list = []
-    for i, (metadata, seq) in enumerate(genome_pairlist): 
-        chrom_slyce_lists += [SlyceList([Slyce(i, lens[i])])]
+    # chrom_slyce_lists = [] # List of slyce lists for each chromosome
+    # chrom_partition_list = []
+    # for i, (metadata, seq, bins) in enumerate(genome_triplist): 
+    #     chrom_slyce_lists += [SlyceList([Slyce(i, lens[i])])]
+
+    chrom_slyce_lists = bins
 
     #print lens
     x = sum_lens
@@ -770,8 +837,7 @@ def rearranger(genome_pairlist, num_rearr, mean_rearr_size, sd_rearr_size):
         
 
 
-        my_chrom = 0
-        # print abs_pos
+        my_chrom = 0        # print abs_pos
         while lens[my_chrom] - size_rearr + 1 < abs_pos:
             abs_pos -= (lens[my_chrom] - size_rearr + 1)
             my_chrom += 1
@@ -875,55 +941,63 @@ def rearranger(genome_pairlist, num_rearr, mean_rearr_size, sd_rearr_size):
     print "x:", x, sum_lens
 
     #Reconstructing original chromosomes according to SlyceLists
-    new_genome_pairlist = []
-    for i, (metadata, seq) in enumerate(genome_pairlist): 
-        new_seq = np.empty(chrom_slyce_lists[i].len(), dtype='string')         #TODO bug due to faulty len tracking (need to find!!)
+    new_genome_triplist = []
+    for i, (metadata, seq, old_bins) in enumerate(genome_triplist): 
+        new_seq = np.empty(chrom_slyce_lists[i].len(), dtype='string')         #TODO bug due to faulty len tracking (need to find!!) squashed???
         print chrom_slyce_lists[i].len()
 
         loc = 0
         for s in chrom_slyce_lists[i].sl:
             # print new_seq[loc:loc+s.len()]
-            # print genome_pairlist[s.l][1][s.i1:s.i2:s.i3]
-            new_seq[loc:loc+s.len()] = genome_pairlist[s.l][1][s.i1:s.i2:s.i3]
+            # print genome_triplist[s.l][1][s.i1:s.i2:s.i3]
+            new_seq[loc:loc+s.len()] = genome_triplist[s.l][1][s.i1:s.i2:s.i3]
             loc += s.len()
-        new_genome_pairlist += [(metadata, new_seq)]
+        new_genome_triplist += [(metadata, new_seq, chrom_slyce_lists[i])]
 
     for i, csl in enumerate(chrom_slyce_lists):
         #print "L", i, csl.len()
         print "F", i, csl
 
-    return new_genome_pairlist
 
-    #sys.exit(0)
-
+    # print list(enumerate(genome_triplist))
+    # for i, (old_m, old_seq) in enumerate(genome_triplist): 
+    #     new_seq = new_genome_triplist[i][1]
+    #     print i
+    #     for j, b in enumerate(list(new_seq)):
+    #         if b != new_seq[i]:
+    #             print j, ": ", b, '!=', new_seq
+        
+    # sys.exit()
+    return new_genome_triplist
 
 # UTILITY METHODS -----------------------------------------
 
-# Return a genome pairlist that contains only scaffolds where 
+# Return a genome triplist that contains only scaffolds where 
 # bp length > MIN_SCAFFOLD_LENGTH. Run this once and keep the output
 # file for use in nessie. 
-def isolate_chroms(genome_pairlist): 
+def isolate_chroms(genome_triplist): 
     new_genome = []
-    for metadata, seq in genome_pairlist: 
+    for metadata, seq in genome_triplist: 
         if len(seq) >= MIN_SCAFFOLD_LENGTH:
             print "    Scaffold " + metadata.split(' ')[0] + ' will be included . . .'
             new_genome += [[metadata, seq]]
     genome_len = 0
     processed_genome = []
-    for metadata, seq in genome_pairlist: 
+    for metadata, seq in genome_triplist: 
         genome_len += len(seq)
         seq = np.array(list(seq))
         seq[seq == 'N'] = BASES[random.randint(0, 3)] # replace all 'N' bases with random bases
         processed_genome += [[metadata, seq]]
     return processed_genome
 
-# Export a genome pairlist to a file.
-def export_genome(genome_pairlist, output_file):
+# Export a genome triplist to a file.
+def export_genome(genome_triplist, output_file):
     # export to fasta file
     f = open(output_file, 'w')
     print "Writing to " + output_file + " . . ."
     output_text = ""
-    for metadata, seq in genome_pairlist:
+    for metadata, seq, bins in genome_triplist:
+        print bins
         output_text = ">" + metadata + '\n'
         f.write(output_text)
         seq.tofile(f)
