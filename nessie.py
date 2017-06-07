@@ -660,6 +660,12 @@ def single_partition_mutator(scaffold_triple):
                 continue
             b_to_x = set()
             for i in range(0, num_muts[b][p]):
+                if not coord_set_dict[b]: # in the off chance I can't perform a mutation on 'b'; SHOULD BE VERY RARE
+                    print 'Cannot mutate', b
+                    continue
+                    # print coord_set_dict
+                    # print b, coord_set_dict[b], tuple(coord_set_dict[b])
+                    # print "---"
                 rand_element = random.choice(tuple(coord_set_dict[b]))
                 b_to_x.add(rand_element)
                 coord_set_dict[b].remove(rand_element)
@@ -727,7 +733,7 @@ def single_partition_mutator(scaffold_triple):
             bins.sl[bins.slyce_index_at_abs_pos(ii)[0]].add_one()
             #print oi, ins_indexes[ii][0] , ni
             #print oi + ins_indexes[ii][0] - ni
-            new_sequence[ni:ins_indexes[ii][0]] = sequence[oi:oi + ins_indexes[ii][0] - ni]
+            new_sequence[ni:ins_indexes[ii][0]] = sequence[oi:min(oi + ins_indexes[ii][0] - ni, len(new_sequence))]
             new_sequence[ins_indexes[ii][0]] = ins_indexes[ii][1]
             oi = oi + ins_indexes[ii][0] - ni
             ni = ins_indexes[ii][0] + 1
@@ -752,14 +758,15 @@ def single_partition_mutator(scaffold_triple):
     #     print "ERROR: Misaligned bins.", len(new_sequence), "!=", bins.len()
     #     sys.exit(0)
 
+    # the following are temporary hacks to fix the bin alignment bug in the above code:
+    new_sequence = np.array([random.choice(BASES) if x != '' else x for x in new_sequence])
+    
+    if len(new_sequence) > bins.len():
+        new_sequence = new_sequence[0:bins.len()]
+    elif len(new_sequence) < bins.len():
+        new_sequence = np.array(list(new_sequence) + [random.choice(BASES) for i in range(bins.len()-len(new_sequence))])
 
-    new_sequence = np.array([x for x in new_sequence if x != ''])
-
-    # print new_sequence, len(new_sequence)
-
-    #print len(ins_indexes), len(del_indexes)
-    #print bins.len(), len(sequence)
-
+    print bins.len(), len(new_sequence)
     return metadata, new_sequence, bins
 
 # def multipartition_mutator(scaffold_triple):
@@ -777,7 +784,7 @@ def point_mut_single_partition(genome_triplist, lambda_sub, lambda_ins, lambda_d
     mapped_vals = map(single_partition_mutator, \
         [[p[0], p[1], p[2], float(lambda_sub), float(lambda_ins), float(lambda_del)] \
         for p in genome_triplist])
-    sys.exit(0)
+    #   sys.exit(0)
     return mapped_vals
 
 # # same as above, but uses the multipartition model
