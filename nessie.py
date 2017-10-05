@@ -127,6 +127,7 @@ def export_genome(genome_triplist, output_file):
             print "    Written scaffold " + metadata.split(' ')[0] + " to file . . ."
         else:
             # TODO how to export a triplist WITH BIN INFORMATION to a file
+            pass
 
 # Define command-line arguments.
 def parse_args():
