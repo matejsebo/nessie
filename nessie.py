@@ -831,7 +831,8 @@ def point_mut_single_partition(genome_triplist, lambda_sub, lambda_ins, lambda_d
     print "Generating point mutations using single partition model."
     # Use mutator(scaff) on all scaff in scaffolds
     pool = Pool(NUM_PROCESSORS)
-    mapped_vals = pool.map(single_partition_mutator, \
+    # change following to pool.map()
+    mapped_vals = map(single_partition_mutator, \
         [[p[0], p[1], p[2], float(lambda_sub), float(lambda_ins), float(lambda_del)] \
         for p in genome_triplist])
     #   sys.exit(0)
