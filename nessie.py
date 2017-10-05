@@ -66,6 +66,68 @@ LIKELIHOOD_IO_REARR = 0.266       #q #NO PARAMETERS #TODO compute from rearr rat
 LIKELIHOOD_ASSIST_TRANSLOC = 0.2 #a
 LIKELIHOOD_TANDEM = 0.70         #t 
 
+# BASE INFORMATION / CONSTANTS ----------------------------
+BLANK = "-"
+A = "A"
+C = "C"
+G = "G"
+T = "T"
+BASES = [A, C, G, T]
+NUM_BASES = len(BASES)
+BASE_MAP = {A:0, C:1, G:2, T:3}
+acgt = [A, C, G, T]
+
+# UTILITY METHODS -----------------------------------------
+
+def fasta_to_dict(fasta_file):
+    f_fasta = open(fasta_file, 'r')
+    data = f_fasta.read()
+
+    scaffolds = data[1:].split('>')
+    scaffolds = [scaf.split('\n', 1) for scaf in scaffolds]
+    try:
+        scaffolds = {scaf[0] : scaf[1].replace('\n', '') for scaf in scaffolds}
+    except IndexError:
+        print fasta_file
+        raise
+    f_fasta.close()
+    return scaffolds
+
+# Return a genome triplist that contains only scaffolds where 
+# bp length > MIN_SCAFFOLD_LENGTH. Run this once and keep the output
+# file for use in nessie. 
+def isolate_chroms(genome_doublist): 
+    new_genome = []
+    for metadata, seq in genome_doublist.items(): 
+        if len(seq) >= MIN_SCAFFOLD_LENGTH:
+            print "    Scaffold " + metadata.split(' ')[0] + ' will be included . . .'
+            new_genome += [[metadata, seq]]
+    genome_len = 0
+    processed_genome = []
+    for metadata, seq in new_genome: 
+        genome_len += len(seq)
+        seq = np.array(list(seq))
+        seq[seq == 'N'] = BASES[random.randint(0, 3)] # replace all 'N' bases with random bases
+        processed_genome += [[metadata, seq, None]]
+    return processed_genome
+
+# Export a genome triplist to a file.
+def export_genome(genome_triplist, output_file):
+    # export to fasta file
+    f = open(output_file, 'w')
+    print "Writing to " + output_file + " . . ."
+    output_text = ""
+    for metadata, seq, bins in genome_triplist:
+        print bins
+        if not bins: 
+            output_text = ">" + metadata + '\n'
+            f.write(output_text)
+            seq.tofile(f)
+            f.write('\n')
+            print "    Written scaffold " + metadata.split(' ')[0] + " to file . . ."
+        else:
+            # TODO how to export a triplist WITH BIN INFORMATION to a file
+
 # Define command-line arguments.
 def parse_args():
     parser = argparse.ArgumentParser(description= \
@@ -90,11 +152,11 @@ def parse_args():
         help='Minimum scaffold size for isolation. See -x.', required=False)
 
     parser.add_argument('-tm','--thallic_mat', \
-        help='Source file for the thallic transition matrix  (in *.csv format).', required=True)
+        help='Source file for the thallic transition matrix  (in *.csv format).', required=False)
     parser.add_argument('-sm','--sub_mat', \
         help='Source file for the base substitution transition matrix (in *.csv format).', required=False)
     parser.add_argument('-pt','--partitions', \
-        help='Source file for the partition indices and rearrangement rates (in *.tsv format).', required=True)
+        help='Source file for the partition indices and rearrangement rates (in *.tsv format).', required=False)
 
     parser.add_argument('-linv','--likelihood_inv', default=LIKELIHOOD_INV, \
         help='Probability(inversion | rearrangement) = "i" in our model.', required=False)
@@ -169,6 +231,18 @@ def parse_args():
             sys.exit("ERROR: Input file required.")
         if not 'out' in args or not args['out']:
             sys.exit("ERROR: Output file required.")
+
+        anc_genome = fasta_to_dict(args['in'])
+    
+        # This handles scaffold isolation. 
+        print "Isolating/processing scaffolds from original genome . . ."
+        out_file = args['out']
+        export_genome(isolate_chroms(anc_genome), out_file)
+        print "Done! Generated " + out_file
+        print "Rerun nessie.py with this file as the input."
+        sys.exit(0)
+    
+    # Otherwise, we will run the evolution simulator.
 
     if args['likelihood_io_rearr'] > 1 or args['likelihood_io_rearr'] < 0 or \
         args['likelihood_inv'] > 1 or args['likelihood_inv'] < 0 or \
@@ -314,17 +388,6 @@ PARTITION_PROBS = PARTITIONS / sum(PARTITIONS)
 
 #print PARTITIONS
 #sys.exit(0)
-
-# BASE INFORMATION / CONSTANTS ----------------------------
-BLANK = "-"
-A = "A"
-C = "C"
-G = "G"
-T = "T"
-BASES = [A, C, G, T]
-NUM_BASES = len(BASES)
-BASE_MAP = {A:0, C:1, G:2, T:3}
-acgt = [A, C, G, T]
 
 # partition handling --------------------------------------
 # The following is for point mutation partitioning and can be ignored for now
@@ -518,15 +581,7 @@ def main():
     # operations are then performed on these triplists. 
 
     anc_genome = fasta_to_dict(IN_FILE)
-    
-    if args['isolate']: # This handles scaffold isolation. 
-        print "Isolating/processing scaffolds from original genome . . ."
-        out_file = IN_FILE.split('/')[-1].split('.')[0] + "_isolated.fasta"
-        export_genome(isolate_chroms(anc_genome), out_file)
-        print "Done! Generated " + out_file
-        print "Rerun nessie.py with this file as the input."
-        sys.exit(0)
-    
+
     # Otherwise, we will run the evolution simulator.
     print "Common ancestor is " + IN_FILE.split('/')[-1]
     print "Reading common ancestor genome . . ."
@@ -1050,54 +1105,6 @@ def rearranger(genome_triplist, num_rearr, mean_rearr_size, sd_rearr_size):
         
     # sys.exit()
     return new_genome_triplist
-
-# UTILITY METHODS -----------------------------------------
-
-# Return a genome triplist that contains only scaffolds where 
-# bp length > MIN_SCAFFOLD_LENGTH. Run this once and keep the output
-# file for use in nessie. 
-def isolate_chroms(genome_triplist): 
-    new_genome = []
-    for metadata, seq in genome_triplist: 
-        if len(seq) >= MIN_SCAFFOLD_LENGTH:
-            print "    Scaffold " + metadata.split(' ')[0] + ' will be included . . .'
-            new_genome += [[metadata, seq]]
-    genome_len = 0
-    processed_genome = []
-    for metadata, seq in genome_triplist: 
-        genome_len += len(seq)
-        seq = np.array(list(seq))
-        seq[seq == 'N'] = BASES[random.randint(0, 3)] # replace all 'N' bases with random bases
-        processed_genome += [[metadata, seq]]
-    return processed_genome
-
-# Export a genome triplist to a file.
-def export_genome(genome_triplist, output_file):
-    # export to fasta file
-    f = open(output_file, 'w')
-    print "Writing to " + output_file + " . . ."
-    output_text = ""
-    for metadata, seq, bins in genome_triplist:
-        print bins
-        output_text = ">" + metadata + '\n'
-        f.write(output_text)
-        seq.tofile(f)
-        f.write('\n')
-        print "    Written scaffold " + metadata.split(' ')[0] + " to file . . ."
-
-def fasta_to_dict(fasta_file):
-    f_fasta = open(fasta_file, 'r')
-    data = f_fasta.read()
-
-    scaffolds = data[1:].split('>')
-    scaffolds = [scaf.split('\n', 1) for scaf in scaffolds]
-    try:
-        scaffolds = {scaf[0] : scaf[1].replace('\n', '') for scaf in scaffolds}
-    except IndexError:
-        print fasta_file
-        raise
-    f_fasta.close()
-    return scaffolds
 
 if __name__ == '__main__':
     main()
