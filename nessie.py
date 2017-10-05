@@ -32,7 +32,7 @@ from slyce import SlyceList, Slyce
 
 # Default values for our parameters -----------------------
 OUT_DIRECTORY = 'nessie_out/'
-NUM_PROCESSORS = 8
+NUM_PROCESSORS = 8 
 DEPTH = 3 #log_2(number of evolved output genomes we want)
 MIN_SCAFFOLD_LENGTH = 100000
 TIME_LAMBDA = 1.0 # rate of speciation (leave at 1.0)
@@ -128,7 +128,7 @@ def export_genome(genome_triplist, output_file):
         else:
             # TODO how to export a triplist WITH BIN INFORMATION to a file
             pass
-
+            
 # Define command-line arguments.
 def parse_args():
     parser = argparse.ArgumentParser(description= \
@@ -788,7 +788,7 @@ def single_partition_mutator(scaffold_triple):
         while index < del_num:
             rand_index = np.random.randint(0, scaf_len)
             if sequence[rand_index] == b:
-                del_indexes.add(rand_index)
+                del_indexes.add((rand_index, None))
                 index += 1
 
     # insertions
@@ -817,14 +817,15 @@ def single_partition_mutator(scaffold_triple):
     #     sys.exit(0)
     #     si, tot_bases = bins.slyce_index_at_abs_pos(i)
     #     bins.sl[si].add_one()
-    ins_indexes = list(sorted(ins_indexes, key=lambda inst: inst[0]))
-    del_indexes = list(sorted(del_indexes))
+    indels = sorted(ins_indexes | del_indexes)
+    ##ins_indexes = list(sorted(ins_indexes, key=lambda inst: inst[0]))
+    ##del_indexes = list(sorted(del_indexes))
 
     # # The following line is a huge runtime sink:
     # sequence = np.array(list("".join(sequence))) # recreate array
 
-    ii = 0 # insertion list index
-    di = 0 # deletion list index
+    ##ii = 0 # insertion list index
+    ##di = 0 # deletion list index
     oi = 0 # index in new master sequence
     ni = 0 # index in old master sequence
     is_ins = False
@@ -832,6 +833,14 @@ def single_partition_mutator(scaffold_triple):
     for s in bins.sl:
         s.length = len(new_sequence)
 
+
+    for indel in indels:
+        if indel[1]:
+            # insertion
+            pass
+        else:
+            # deletion
+            pass
     # print len(ins_indexes), len(del_indexes)
     while di < len(del_indexes) and ii < len(ins_indexes):
         if di >= len(del_indexes) or ins_indexes[ii][0] < del_indexes[di]: # handle insertion
